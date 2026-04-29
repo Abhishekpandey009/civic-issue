@@ -5,6 +5,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
+
 const connectDB = require('./config/db');
 const User = require('./models/User');
 const errorHandler = require('./middleware/errorHandler');
@@ -13,25 +14,36 @@ dotenv.config({ path: path.join(__dirname, '.env'), override: true });
 
 const app = express();
 const server = http.createServer(app);
+
+// ✅ Allowed origins (IMPORTANT FIX)
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://civic-issue-blue.vercel.app"
+];
+
+// ✅ Socket.io CORS FIX
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: allowedOrigins,
     credentials: true,
   },
 });
 
 app.set('io', io);
 
+// Socket connection
 io.on('connection', (socket) => {
   socket.on('joinUserRoom', (userId) => {
     if (userId) socket.join(`user:${userId}`);
   });
 });
 
+// ✅ Express CORS FIX
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: allowedOrigins,
   credentials: true,
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -44,10 +56,12 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/notifications', require('./routes/notifications'));
 
+// Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Civic Report API running' });
 });
 
+// Error handler
 app.use(errorHandler);
 
 const BASE_PORT = parseInt(process.env.PORT || '5000', 10);
@@ -76,6 +90,7 @@ const startListeningWithFallback = async (startPort, maxAttempts = 10) => {
   throw new Error(`No available port found from ${startPort} to ${startPort + maxAttempts - 1}`);
 };
 
+// Seed admin
 const seedAdminAccount = async () => {
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const adminPassword = process.env.ADMIN_PASSWORD;
@@ -98,6 +113,7 @@ const seedAdminAccount = async () => {
   }
 
   let needsSave = false;
+
   if (admin.role !== 'admin') {
     admin.role = 'admin';
     needsSave = true;
@@ -119,6 +135,7 @@ const seedAdminAccount = async () => {
   );
 };
 
+// Start server
 const startServer = async () => {
   try {
     await connectDB();
